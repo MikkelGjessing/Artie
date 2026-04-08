@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Artie – Save Page",
-  "version": "1.0.0",
-  "description": "Save any webpage as a clean, offline-readable HTML document with embedded images.",
+  "name": "Artie – Save as PDF",
+  "version": "1.1.0",
+  "description": "Save any webpage as a clean, print-friendly PDF via Chrome's built-in print dialog.",
   "permissions": ["activeTab", "scripting"],
   "background": {
     "service_worker": "background.js"
@@ -19,7 +19,7 @@
     }
   ],
   "action": {
-    "default_title": "Artie – Save Page",
+    "default_title": "Artie – Save as PDF",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",

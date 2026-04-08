@@ -141,13 +141,13 @@
     const shadow = host.attachShadow({ mode: 'open' });
     shadow.innerHTML = `
       <style>${OVERLAY_CSS}</style>
-      <div id="artie-overlay" role="dialog" aria-label="Artie Save Page" aria-modal="false">
+      <div id="artie-overlay" role="dialog" aria-label="Artie Save as PDF" aria-modal="false">
         <div id="artie-titlebar">
           <span id="artie-title">📄 Artie</span>
           <button id="artie-close" title="Close Artie" aria-label="Close">✕</button>
         </div>
         <div id="artie-body">
-          <button id="artie-save">Save Page</button>
+          <button id="artie-save">Save as PDF</button>
           <div id="artie-status" aria-live="polite"></div>
         </div>
       </div>
@@ -177,10 +177,10 @@
     // Close button --------------------------------------------------------
     closeBtn.addEventListener('click', () => dismissOverlay(overlay));
 
-    // Save Page button ----------------------------------------------------
+    // Save as PDF button --------------------------------------------------
     saveBtn.addEventListener('click', async () => {
       saveBtn.disabled = true;
-      setStatus(statusEl, 'Extracting content…', '');
+      setStatus(statusEl, 'Preparing PDF…', '');
 
       try {
         if (!window.ArticleExtractor || !window.ArticleExporter) {
@@ -189,31 +189,18 @@
 
         const extracted = window.ArticleExtractor.extract(document);
 
-        const { filename, imageStats } = await window.ArticleExporter.exportPage(
-          extracted,
-          (stage) => {
-            if (stage === 'embedding') {
-              setStatus(statusEl, 'Embedding images…', '');
-            } else if (stage === 'building') {
-              setStatus(statusEl, 'Building document…', '');
-            } else if (stage === 'downloading') {
-              setStatus(statusEl, 'Saving…', '');
-            }
+        await window.ArticleExporter.exportPage(extracted, (stage) => {
+          if (stage === 'building') {
+            setStatus(statusEl, 'Preparing PDF…', '');
+          } else if (stage === 'opening') {
+            setStatus(statusEl, 'Opening print dialog…', '');
           }
-        );
+        });
 
-        const { embedded, failed } = imageStats;
-        const imgNote = embedded > 0
-          ? ` · ${embedded} image${embedded !== 1 ? 's' : ''} embedded`
-          : '';
-        const failNote = failed > 0
-          ? ` (${failed} image${failed !== 1 ? 's' : ''} not embedded)`
-          : '';
-
-        setStatus(statusEl, `✓ Saved "${filename}"${imgNote}${failNote}`, 'artie-success');
+        setStatus(statusEl, '✓ Print dialog opened', 'artie-success');
       } catch (err) {
-        console.error('[Artie] Save error:', err);
-        setStatus(statusEl, `Error: ${err.message || 'Unknown error'}`, 'artie-error');
+        console.error('[Artie] PDF error:', err);
+        setStatus(statusEl, `Failed: ${err.message || 'Unknown error'}`, 'artie-error');
       } finally {
         saveBtn.disabled = false;
       }
