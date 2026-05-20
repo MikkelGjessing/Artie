@@ -11,6 +11,7 @@
  *   const { filename, imageStats } = await window.ArticleExporter.exportPage(extracted, onProgress);
  */
 window.ArticleExporter = (() => {
+  const PRINT_DELAY_MS = 200;
   // -----------------------------------------------------------------------
   // Image embedding
   // -----------------------------------------------------------------------
@@ -329,7 +330,7 @@ ${READER_CSS}
     return `${sanitiseFilename(title || 'saved-page')}.pdf`;
   }
 
-  function deriveArticleHeader(title, content) {
+  function deriveArticleTitle(title, content) {
     const heading = content?.querySelector?.('h1, h2')?.textContent?.trim();
     return heading || title || 'saved-page';
   }
@@ -385,7 +386,7 @@ ${READER_CSS}
     printWindow.document.close();
 
     // Let the browser finish layout before opening print.
-    setTimeout(startPrint, 200);
+    setTimeout(startPrint, PRINT_DELAY_MS);
   }
 
   // -----------------------------------------------------------------------
@@ -429,7 +430,7 @@ ${READER_CSS}
     const { title, byline, content } = extracted;
     const sourceURL = window.location.href;
     const savedAt = new Date().toLocaleString();
-    const articleHeader = deriveArticleHeader(title, content);
+    const articleHeader = deriveArticleTitle(title, content);
 
     onProgress && onProgress('images', 'Starting image embedding…');
     const imageStats = await embedImages(content, onProgress);

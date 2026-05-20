@@ -192,7 +192,7 @@
         const { filename, imageStats } = await window.ArticleExporter.exportPdf(
           extracted,
           (stage) => {
-            if (stage === 'embedding') {
+            if (stage === 'images') {
               setStatus(statusEl, 'Embedding images…', '');
             } else if (stage === 'building') {
               setStatus(statusEl, 'Building printable page…', '');
