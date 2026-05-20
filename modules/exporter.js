@@ -2,7 +2,7 @@
 
 /**
  * ArticleExporter – builds a self-contained offline HTML file from
- * extracted article data and triggers a browser download.
+ * extracted article data and can either download HTML or open print-to-PDF.
  *
  * Exported as `window.ArticleExporter` so it can be consumed by the
  * content script that is loaded after this file.
@@ -325,6 +325,15 @@ ${READER_CSS}
     return `${sanitiseFilename(title || 'saved-page')}_${date}.html`;
   }
 
+  function buildPdfFilename(title) {
+    return `${sanitiseFilename(title || 'saved-page')}.pdf`;
+  }
+
+  function deriveArticleHeader(title, content) {
+    const heading = content?.querySelector?.('h1, h2')?.textContent?.trim();
+    return heading || title || 'saved-page';
+  }
+
   // -----------------------------------------------------------------------
   // Download trigger
   // -----------------------------------------------------------------------
@@ -344,6 +353,39 @@ ${READER_CSS}
       document.body.removeChild(anchor);
       URL.revokeObjectURL(url);
     });
+  }
+
+  /** Open/prepare a new tab for printing before async work (avoids popup blocking). */
+  function openPrintWindow() {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      throw new Error('Popup blocked. Please allow popups for this site to export PDF.');
+    }
+
+    printWindow.document.open();
+    printWindow.document.write('<!doctype html><title>Preparing PDF…</title><p>Preparing PDF…</p>');
+    printWindow.document.close();
+    return printWindow;
+  }
+
+  /** Render HTML into a prepared tab and open the print dialog. */
+  function triggerPrintDialog(printWindow, html, documentTitle) {
+    const startPrint = () => {
+      try {
+        printWindow.document.title = documentTitle;
+        printWindow.focus();
+        printWindow.print();
+      } catch (err) {
+        throw new Error(`Could not open print dialog: ${err?.message || 'Unknown error'}`);
+      }
+    };
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+
+    // Let the browser finish layout before opening print.
+    setTimeout(startPrint, 200);
   }
 
   // -----------------------------------------------------------------------
@@ -375,5 +417,32 @@ ${READER_CSS}
     return { filename, imageStats };
   }
 
-  return { exportPage, buildFilename };
+  /**
+   * Full pipeline for PDF: reserve tab → embed images → build HTML → print.
+   *
+   * @param {{ title: string, byline: string, content: HTMLElement }} extracted
+   * @param {Function|undefined} onProgress  (stage: string, detail: string) => void
+   * @returns {Promise<{ filename: string, imageStats: object }>}
+   */
+  async function exportPdf(extracted, onProgress) {
+    const printWindow = openPrintWindow();
+    const { title, byline, content } = extracted;
+    const sourceURL = window.location.href;
+    const savedAt = new Date().toLocaleString();
+    const articleHeader = deriveArticleHeader(title, content);
+
+    onProgress && onProgress('images', 'Starting image embedding…');
+    const imageStats = await embedImages(content, onProgress);
+
+    onProgress && onProgress('building', 'Building printable page…');
+    const html = buildHTML({ title: articleHeader, byline, content, savedAt, sourceURL });
+
+    const filename = buildPdfFilename(articleHeader);
+    onProgress && onProgress('printing', filename);
+    triggerPrintDialog(printWindow, html, articleHeader);
+
+    return { filename, imageStats };
+  }
+
+  return { exportPage, exportPdf, buildFilename, buildPdfFilename };
 })();

@@ -147,7 +147,7 @@
           <button id="artie-close" title="Close Artie" aria-label="Close">✕</button>
         </div>
         <div id="artie-body">
-          <button id="artie-save">Save Page</button>
+          <button id="artie-save">Export PDF</button>
           <div id="artie-status" aria-live="polite"></div>
         </div>
       </div>
@@ -177,7 +177,7 @@
     // Close button --------------------------------------------------------
     closeBtn.addEventListener('click', () => dismissOverlay(overlay));
 
-    // Save Page button ----------------------------------------------------
+    // Export PDF button ---------------------------------------------------
     saveBtn.addEventListener('click', async () => {
       saveBtn.disabled = true;
       setStatus(statusEl, 'Extracting content…', '');
@@ -189,15 +189,15 @@
 
         const extracted = window.ArticleExtractor.extract(document);
 
-        const { filename, imageStats } = await window.ArticleExporter.exportPage(
+        const { filename, imageStats } = await window.ArticleExporter.exportPdf(
           extracted,
           (stage) => {
             if (stage === 'embedding') {
               setStatus(statusEl, 'Embedding images…', '');
             } else if (stage === 'building') {
-              setStatus(statusEl, 'Building document…', '');
-            } else if (stage === 'downloading') {
-              setStatus(statusEl, 'Saving…', '');
+              setStatus(statusEl, 'Building printable page…', '');
+            } else if (stage === 'printing') {
+              setStatus(statusEl, 'Opening print dialog…', '');
             }
           }
         );
@@ -210,7 +210,7 @@
           ? ` (${failed} image${failed !== 1 ? 's' : ''} not embedded)`
           : '';
 
-        setStatus(statusEl, `✓ Saved "${filename}"${imgNote}${failNote}`, 'artie-success');
+        setStatus(statusEl, `✓ PDF ready as "${filename}"${imgNote}${failNote}`, 'artie-success');
       } catch (err) {
         console.error('[Artie] Save error:', err);
         setStatus(statusEl, `Error: ${err.message || 'Unknown error'}`, 'artie-error');
