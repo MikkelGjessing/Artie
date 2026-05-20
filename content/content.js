@@ -189,7 +189,7 @@
 
         const extracted = window.ArticleExtractor.extract(document);
 
-        const { filename, imageStats } = await window.ArticleExporter.exportPdf(
+        const { filename: suggestedFilename, imageStats } = await window.ArticleExporter.exportPdf(
           extracted,
           (stage) => {
             if (stage === 'images') {
@@ -210,7 +210,7 @@
           ? ` (${failed} image${failed !== 1 ? 's' : ''} not embedded)`
           : '';
 
-        setStatus(statusEl, `✓ PDF ready as "${filename}"${imgNote}${failNote}`, 'artie-success');
+        setStatus(statusEl, `✓ PDF ready as "${suggestedFilename}"${imgNote}${failNote}`, 'artie-success');
       } catch (err) {
         console.error('[Artie] Save error:', err);
         setStatus(statusEl, `Error: ${err.message || 'Unknown error'}`, 'artie-error');

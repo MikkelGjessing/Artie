@@ -333,7 +333,7 @@ ${READER_CSS}
   }
 
   function deriveArticleTitle(title, content) {
-    const heading = content?.querySelector?.('h1, h2')?.textContent?.trim();
+    const heading = content?.querySelector('h1, h2')?.textContent?.trim();
     return heading || title || 'saved-page';
   }
 
@@ -386,7 +386,7 @@ ${READER_CSS}
           printWindow.print();
           resolve();
         } catch (err) {
-          reject(new Error(`Could not open print dialog: ${err?.message || 'Unknown error'}`));
+          reject(new Error(`Print operation failed: ${err?.message || 'Unknown error'}`));
         }
       }, PRINT_DELAY_MS);
     });
