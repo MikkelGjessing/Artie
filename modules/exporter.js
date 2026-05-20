@@ -11,6 +11,7 @@
  *   const { filename, imageStats } = await window.ArticleExporter.exportPage(extracted, onProgress);
  */
 window.ArticleExporter = (() => {
+  // Allow the browser to finish layout and image painting before print().
   const PRINT_DELAY_MS = 200;
   // -----------------------------------------------------------------------
   // Image embedding
@@ -327,6 +328,7 @@ ${READER_CSS}
   }
 
   function buildPdfFilename(title) {
+    // Used for UI feedback; the browser may further sanitise the final filename.
     return `${sanitiseFilename(title || 'saved-page')}.pdf`;
   }
 
@@ -371,22 +373,23 @@ ${READER_CSS}
 
   /** Render HTML into a prepared tab and open the print dialog. */
   function triggerPrintDialog(printWindow, html, documentTitle) {
-    const startPrint = () => {
-      try {
-        printWindow.document.title = documentTitle;
-        printWindow.focus();
-        printWindow.print();
-      } catch (err) {
-        throw new Error(`Could not open print dialog: ${err?.message || 'Unknown error'}`);
-      }
-    };
+    return new Promise((resolve, reject) => {
+      printWindow.document.open();
+      printWindow.document.write(html);
+      printWindow.document.close();
 
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
-
-    // Let the browser finish layout before opening print.
-    setTimeout(startPrint, PRINT_DELAY_MS);
+      // Let the browser finish layout before opening print.
+      setTimeout(() => {
+        try {
+          printWindow.document.title = documentTitle;
+          printWindow.focus();
+          printWindow.print();
+          resolve();
+        } catch (err) {
+          reject(new Error(`Could not open print dialog: ${err?.message || 'Unknown error'}`));
+        }
+      }, PRINT_DELAY_MS);
+    });
   }
 
   // -----------------------------------------------------------------------
@@ -440,7 +443,7 @@ ${READER_CSS}
 
     const filename = buildPdfFilename(articleHeader);
     onProgress && onProgress('printing', filename);
-    triggerPrintDialog(printWindow, html, articleHeader);
+    await triggerPrintDialog(printWindow, html, articleHeader);
 
     return { filename, imageStats };
   }
