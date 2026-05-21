@@ -3,7 +3,7 @@
   "name": "Artie – Save Page",
   "version": "1.0.0",
   "description": "Save any webpage as a clean, offline-readable HTML document with embedded images.",
-  "permissions": ["activeTab", "scripting"],
+  "permissions": ["activeTab", "scripting", "storage", "downloads", "debugger"],
   "background": {
     "service_worker": "background.js"
   },

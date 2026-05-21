@@ -2,7 +2,8 @@
 
 /**
  * ArticleExporter – builds a self-contained offline HTML file from
- * extracted article data and can either download HTML or open print-to-PDF.
+ * extracted article data and can either download HTML or prepare clean HTML
+ * for automatic PDF generation.
  *
  * Exported as `window.ArticleExporter` so it can be consumed by the
  * content script that is loaded after this file.
@@ -11,8 +12,6 @@
  *   const { filename, imageStats } = await window.ArticleExporter.exportPage(extracted, onProgress);
  */
 window.ArticleExporter = (() => {
-  // Allow the browser to finish layout and image painting before print().
-  const PRINT_DELAY_MS = 200;
   // -----------------------------------------------------------------------
   // Image embedding
   // -----------------------------------------------------------------------
@@ -358,40 +357,6 @@ ${READER_CSS}
     });
   }
 
-  /** Open/prepare a new tab for printing before async work (avoids popup blocking). */
-  function openPrintWindow() {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      throw new Error('Popup blocked. Please allow popups for this site to export PDF.');
-    }
-
-    printWindow.document.open();
-    printWindow.document.write('<!doctype html><title>Preparing PDF…</title><p>Preparing PDF…</p>');
-    printWindow.document.close();
-    return printWindow;
-  }
-
-  /** Render HTML into a prepared tab and open the print dialog. */
-  function triggerPrintDialog(printWindow, html, documentTitle) {
-    return new Promise((resolve, reject) => {
-      printWindow.document.open();
-      printWindow.document.write(html);
-      printWindow.document.close();
-
-      // Let the browser finish layout before opening print.
-      setTimeout(() => {
-        try {
-          printWindow.document.title = documentTitle;
-          printWindow.focus();
-          printWindow.print();
-          resolve();
-        } catch (err) {
-          reject(new Error(`Print operation failed: ${err?.message || 'Unknown error'}`));
-        }
-      }, PRINT_DELAY_MS);
-    });
-  }
-
   // -----------------------------------------------------------------------
   // Public API
   // -----------------------------------------------------------------------
@@ -422,14 +387,13 @@ ${READER_CSS}
   }
 
   /**
-   * Full pipeline for PDF: reserve tab → embed images → build HTML → print.
+   * Full pipeline for PDF: embed images → build HTML → return PDF payload.
    *
    * @param {{ title: string, byline: string, content: HTMLElement }} extracted
    * @param {Function|undefined} onProgress  (stage: string, detail: string) => void
    * @returns {Promise<{ filename: string, imageStats: object }>}
    */
   async function exportPdf(extracted, onProgress) {
-    const printWindow = openPrintWindow();
     const { title, byline, content } = extracted;
     const sourceURL = window.location.href;
     const savedAt = new Date().toLocaleString();
@@ -442,10 +406,9 @@ ${READER_CSS}
     const html = buildHTML({ title: articleHeader, byline, content, savedAt, sourceURL });
 
     const filename = buildPdfFilename(articleHeader);
-    onProgress && onProgress('printing', filename);
-    await triggerPrintDialog(printWindow, html, articleHeader);
+    onProgress && onProgress('saving', filename);
 
-    return { filename, imageStats };
+    return { filename, html, imageStats };
   }
 
   return { exportPage, exportPdf, buildFilename, buildPdfFilename };
