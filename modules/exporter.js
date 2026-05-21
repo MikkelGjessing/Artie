@@ -387,7 +387,8 @@ ${READER_CSS}
   }
 
   /**
-   * Full pipeline for PDF: embed images → build HTML → return PDF payload.
+   * Full pipeline for PDF: embed images → build HTML → return the payload
+   * needed for the background worker to save the PDF automatically.
    *
    * @param {{ title: string, byline: string, content: HTMLElement }} extracted
    * @param {Function|undefined} onProgress  (stage: string, detail: string) => void

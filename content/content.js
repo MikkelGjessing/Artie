@@ -14,6 +14,7 @@
   const HOST_ID = '__artie_overlay_host__';
   const OVERLAY_ENABLED_KEY = 'artieOverlayEnabled';
   let dismissTimerId = null;
+  let syncOverlayStatePending = false;
 
   // -----------------------------------------------------------------------
   // Overlay CSS (injected into the Shadow DOM – fully isolated)
@@ -354,13 +355,29 @@
     try {
       const stored = await chrome.storage.local.get(OVERLAY_ENABLED_KEY);
       return Boolean(stored[OVERLAY_ENABLED_KEY]);
-    } catch {
+    } catch (err) {
+      console.error('[Artie] Could not read overlay state:', err);
       return false;
     }
   }
 
   async function syncOverlayState() {
     applyOverlayEnabled(await readOverlayEnabled());
+  }
+
+  function scheduleOverlayStateSync() {
+    if (syncOverlayStatePending) return;
+
+    syncOverlayStatePending = true;
+    queueMicrotask(async () => {
+      try {
+        await syncOverlayState();
+      } catch (err) {
+        console.error('[Artie] Could not sync overlay state:', err);
+      } finally {
+        syncOverlayStatePending = false;
+      }
+    });
   }
 
   async function setOverlayEnabled(enabled) {
@@ -387,13 +404,13 @@
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-      syncOverlayState();
+      scheduleOverlayStateSync();
     }
   });
 
   window.addEventListener('pageshow', () => {
-    syncOverlayState();
+    scheduleOverlayStateSync();
   });
 
-  syncOverlayState();
+  scheduleOverlayStateSync();
 })();

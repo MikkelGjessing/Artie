@@ -1,6 +1,7 @@
 'use strict';
 
 (async () => {
+  const IMAGE_LOAD_TIMEOUT_MS = 5000;
   const params = new URLSearchParams(window.location.search);
   const jobId = params.get('jobId');
 
@@ -13,7 +14,7 @@
         const done = () => resolve();
         img.addEventListener('load', done, { once: true });
         img.addEventListener('error', done, { once: true });
-        setTimeout(done, 5000);
+        setTimeout(done, IMAGE_LOAD_TIMEOUT_MS);
       }));
 
     await Promise.allSettled(pending);

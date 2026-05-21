@@ -10,15 +10,27 @@
 const OVERLAY_ENABLED_KEY = 'artieOverlayEnabled';
 const PRINT_JOB_PREFIX = 'artiePrintJob:';
 const PRINT_READY_PREFIX = 'artiePrintReady:';
+const DEBUGGER_PROTOCOL_VERSION = '1.3';
 const CONTENT_SCRIPT_FILES = [
   'modules/extractor.js',
   'modules/exporter.js',
   'content/content.js',
 ];
+const POLL_INTERVAL_MS = 100;
 const PRINT_TIMEOUT_MS = 15000;
+let fallbackJobCounter = 0;
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function buildJobId() {
+  if (typeof crypto?.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  fallbackJobCounter += 1;
+  return `artie-${Date.now()}-${fallbackJobCounter}`;
 }
 
 async function getOverlayEnabled() {
@@ -70,7 +82,7 @@ function waitForPrintReady(jobId) {
         return;
       }
 
-      setTimeout(poll, 100);
+      setTimeout(poll, POLL_INTERVAL_MS);
     };
 
     poll();
@@ -79,7 +91,7 @@ function waitForPrintReady(jobId) {
 
 async function renderTabToPdf(tabId) {
   const debuggee = { tabId };
-  await chrome.debugger.attach(debuggee, '1.3');
+  await chrome.debugger.attach(debuggee, DEBUGGER_PROTOCOL_VERSION);
 
   try {
     await chrome.debugger.sendCommand(debuggee, 'Page.enable');
@@ -103,7 +115,7 @@ async function handleExportPdf({ html, filename }) {
     throw new Error('Missing PDF export payload.');
   }
 
-  const jobId = crypto.randomUUID();
+  const jobId = buildJobId();
   const jobKey = `${PRINT_JOB_PREFIX}${jobId}`;
   let tabId = null;
 
