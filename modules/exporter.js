@@ -391,7 +391,7 @@ ${READER_CSS}
    *
    * @param {{ title: string, byline: string, content: HTMLElement }} extracted
    * @param {Function|undefined} onProgress  (stage: string, detail: string) => void
-   * @returns {Promise<{ filename: string, imageStats: object }>}
+   * @returns {Promise<{ filename: string, html: string, imageStats: object }>}
    */
   async function exportPdf(extracted, onProgress) {
     const { title, byline, content } = extracted;

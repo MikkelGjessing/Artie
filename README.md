@@ -1,6 +1,6 @@
 # Artie – Export Article PDF
 
-A Chrome extension (Manifest V3) that injects a small floating overlay into any webpage and opens a one-click print-to-PDF flow using the article header as the PDF filename.
+A Chrome extension (Manifest V3) that injects a small floating overlay into any webpage and saves a PDF automatically using the article header as the filename.
 
 ---
 
@@ -11,8 +11,9 @@ A Chrome extension (Manifest V3) that injects a small floating overlay into any 
   1. Extracts the main readable content using a Readability-style heuristic.
   2. Embeds images as base64 data URLs (where CORS allows).
   3. Generates a clean, styled printable page.
-  4. Opens the browser print dialog so you can save as PDF.
-- The overlay stays on screen until you dismiss it (close button or second toolbar-icon click).
+  4. Renders the page in a temporary extension tab and downloads the PDF automatically.
+- Clicking the toolbar icon turns the floating overlay on or off globally.
+- While enabled, the overlay follows you across pages and reappears after tab switches or navigation.
 - Works entirely in-page — no browser popup, no external server, no tracking.
 
 ---
@@ -54,13 +55,13 @@ artie/
 
 1. Navigate to any article, documentation page, or blog post.
 2. Click the **Artie** toolbar icon.  
-   A small floating panel appears in the bottom-right corner of the page.
-3. Click **Export PDF**.  
-   - Status updates: *Extracting content…* → *Embedding images…* → *Opening print dialog…* → *✓ PDF ready as "…"*
-4. Chrome opens the print dialog; choose **Save as PDF**.
+   A small floating panel appears in the bottom-right corner of the page and stays enabled as you move between pages.
+3. Click **Save PDF**.  
+   - Status updates: *Extracting content…* → *Embedding images…* → *Building printable page…* → *Saving PDF…* → *✓ Saved PDF as "…"*
+4. Chrome downloads the PDF automatically.
 5. The default PDF filename uses the article header (spaces/special characters are sanitised by browser rules).
 6. Open the saved file in any browser – it works completely offline.
-7. Click **✕** or the toolbar icon again to dismiss the overlay.
+7. Click **✕** or the toolbar icon again to turn the overlay off.
 8. The overlay is draggable — grab the title bar and move it anywhere.
 
 ---
@@ -70,16 +71,18 @@ artie/
 ### Background service worker (`background.js`)
 
 - Listens for `chrome.action.onClicked`.
-- Sends a `TOGGLE_OVERLAY` message to the active tab's content script.
+- Persists whether the overlay is enabled and sends that state to the active tab's content script.
 - Falls back to programmatic injection via `chrome.scripting.executeScript` when the content script isn't yet present (e.g. tabs open before the extension was installed).
+- Receives PDF export requests, renders the saved article in a temporary extension tab, then uses `Page.printToPDF` plus `chrome.downloads.download` to save the PDF automatically.
 
 ### Content script (`content/content.js`)
 
 - Declared in `manifest.json`; auto-injected into every page on `document_idle`.
-- Listens for `TOGGLE_OVERLAY` messages and calls `toggleOverlay()`.
+- Reads the persisted overlay state on load and when the tab becomes visible.
+- Listens for `SET_OVERLAY_ENABLED` messages and updates the overlay accordingly.
 - Creates a `<div>` host element appended to `<html>`, then attaches a **Shadow DOM** (`mode: 'open'`) to it for full CSS isolation.
 - Manages the overlay lifecycle: show / hide / drag / close.
-- Calls `ArticleExtractor.extract()` and `ArticleExporter.exportPdf()` when the user clicks **Export PDF**.
+- Calls `ArticleExtractor.extract()` and `ArticleExporter.exportPdf()` when the user clicks **Save PDF**.
 
 ### Extractor (`modules/extractor.js`)
 
@@ -96,7 +99,8 @@ artie/
 - Skips decorative images (tracking pixels, icons, tiny images, SVGs without alt text).
 - Falls back gracefully: if an image can't be fetched, the original URL is kept and the failure count is reported in the status text.
 - Builds a complete `<!DOCTYPE html>` document with an embedded reader stylesheet (dark-mode aware, responsive, serif typography).
-- Triggers the download using a `Blob` object URL and a hidden `<a download>` click.
+- Triggers HTML downloads using a `Blob` object URL and a hidden `<a download>` click.
+- Returns PDF-ready HTML payloads to the background worker for automatic PDF saving.
 
 ### Shadow DOM overlay
 
@@ -113,8 +117,11 @@ The overlay host (`<div id="__artie_overlay_host__">`) is appended directly to `
 |---------------|--------------------------------------------------------------|
 | `activeTab`   | Lets the service worker send messages and inject scripts into the currently active tab without broad host permissions. |
 | `scripting`   | Used by `chrome.scripting.executeScript` to programmatically inject the content scripts into tabs that were open before the extension was installed. |
+| `storage`     | Persists whether the overlay is enabled and temporarily stores the PDF render payload. |
+| `downloads`   | Saves the generated PDF automatically without opening the browser print dialog. |
+| `debugger`    | Uses `Page.printToPDF` in a temporary extension tab to generate the PDF bytes. |
 
-No host permissions, no `storage`, no `tabs`, no `cookies` — Artie requests the minimum needed.
+No host permissions, no `tabs`, no `cookies` — Artie requests the minimum needed.
 
 ---
 

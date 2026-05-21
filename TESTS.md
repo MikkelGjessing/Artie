@@ -19,7 +19,7 @@ without any automated test framework — just a browser with Developer Tools ope
 |------|--------|-----------------|
 | 1 | Navigate to any plain article (e.g. `https://en.wikipedia.org/wiki/World_Wide_Web`). | Page loads normally. |
 | 2 | Click the Artie toolbar icon. | A small floating panel appears in the bottom-right corner. |
-| 3 | Verify the overlay contains: title bar "📄 Artie", "Export PDF" button, status area, and "✕" close button. | All elements present. |
+| 3 | Verify the overlay contains: title bar "📄 Artie", "Save PDF" button, status area, and "✕" close button. | All elements present. |
 | 4 | Click the toolbar icon a second time. | The overlay is dismissed with a fade-out animation. |
 | 5 | Click the toolbar icon a third time. | The overlay reappears. |
 
@@ -49,8 +49,8 @@ without any automated test framework — just a browser with Developer Tools ope
 | Step | Action | Expected result |
 |------|--------|-----------------|
 | 1 | Navigate to `https://www.bbc.com/news` and open a news article. | |
-| 2 | Open the overlay and click **Export PDF**. | Status changes: *Extracting content…* → *Embedding images…* → *Opening print dialog…* → *✓ PDF ready as "…"*. |
-| 3 | In the print dialog choose **Save as PDF** and save the file. | Default filename is the article header. |
+| 2 | Open the overlay and click **Save PDF**. | Status changes: *Extracting content…* → *Embedding images…* → *Building printable page…* → *Saving PDF…* → *✓ Saved PDF as "…"*. |
+| 3 | Wait for the download to complete. | A PDF is downloaded automatically with the article header as the filename. |
 | 4 | Disconnect from the internet (or use DevTools → Network → Offline). Open the saved file. | Page still renders correctly; embedded images display; non-embedded images are broken (expected). |
 
 ---
@@ -60,7 +60,7 @@ without any automated test framework — just a browser with Developer Tools ope
 | Step | Action | Expected result |
 |------|--------|-----------------|
 | 1 | Navigate to `https://en.wikipedia.org/wiki/Apollo_11`. | |
-| 2 | Click **Export PDF**. | Status shows "Embedding images…" for a few seconds. |
+| 2 | Click **Save PDF**. | Status shows "Embedding images…" for a few seconds. |
 | 3 | Check the status message after completion. | Reports number of embedded images and how many (if any) failed. |
 | 4 | Open saved file offline. | Main text and infobox are preserved; most Wikipedia images are embedded (CORS usually permits). |
 
@@ -72,7 +72,7 @@ without any automated test framework — just a browser with Developer Tools ope
 |------|--------|-----------------|
 | 1 | Navigate to a page known to block CORS image fetches (e.g. a newspaper with CDN images). | |
 | 2 | Open DevTools Console before saving. | |
-| 3 | Click **Export PDF**. | Console shows `[Artie] Could not embed image: …` warnings for each blocked image. |
+| 3 | Click **Save PDF**. | Console shows `[Artie] Could not embed image (CORS or network error): …` warnings for each blocked image. |
 | 4 | Status text reports the failed count, e.g. *… (3 images not embedded)*. | |
 | 5 | Open the saved file. | Page renders; affected images appear broken (original URL kept) — no crash. |
 
@@ -83,7 +83,7 @@ without any automated test framework — just a browser with Developer Tools ope
 | Step | Action | Expected result |
 |------|--------|-----------------|
 | 1 | Navigate to `https://example.com`. | |
-| 2 | Click **Export PDF**. | Print dialog opens without error. |
+| 2 | Click **Save PDF**. | A PDF downloads without error. |
 | 3 | Open the saved file. | Shows "Example Domain" heading and paragraph text. No crashes. |
 
 ---
@@ -94,7 +94,7 @@ without any automated test framework — just a browser with Developer Tools ope
 |------|--------|-----------------|
 | 1 | Manually break `modules/extractor.js` (e.g. add a `throw new Error('test')` at the top). | |
 | 2 | Reload the extension and navigate to any page. | |
-| 3 | Click **Export PDF**. | Status shows red error text: *Error: test*. Button re-enables after. |
+| 3 | Click **Save PDF**. | Status shows red error text: *Error: test*. Button re-enables after. |
 | 4 | Revert the change. | Normal operation resumes. |
 
 ---
@@ -124,7 +124,19 @@ without any automated test framework — just a browser with Developer Tools ope
 | Step | Action | Expected result |
 |------|--------|-----------------|
 | 1 | Navigate to a page with a long or special-character title (e.g. `"Hello: World < Test > 2024"`). | |
-| 2 | Click **Export PDF**. | Print dialog default filename uses the article header and preserves valid characters while sanitising invalid ones. |
+| 2 | Click **Save PDF**. | Downloaded PDF filename uses the article header and preserves valid characters while sanitising invalid ones. |
+
+---
+
+## TC-13 · Overlay persistence across tabs
+
+| Step | Action | Expected result |
+|------|--------|-----------------|
+| 1 | Open two normal web pages in separate tabs. | |
+| 2 | Enable the Artie overlay in the first tab. | Overlay appears. |
+| 3 | Switch to the second tab. | The overlay appears there without clicking the toolbar icon again. |
+| 4 | Navigate within the second tab. | The overlay reappears on the next page load. |
+| 5 | Click **✕** or the toolbar icon. | The overlay turns off and stays off when switching tabs again. |
 
 ---
 

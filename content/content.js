@@ -4,7 +4,7 @@
  * Artie – Content Script
  *
  * Injects and manages a floating Shadow DOM overlay on the current page.
- * Listens for TOGGLE_OVERLAY messages from the background service worker.
+ * Listens for global overlay-state updates from the background service worker.
  *
  * Dependencies (loaded before this file via manifest content_scripts array):
  *   window.ArticleExtractor  – modules/extractor.js
@@ -178,7 +178,11 @@
 
     // Close button --------------------------------------------------------
     closeBtn.addEventListener('click', async () => {
-      await setOverlayEnabled(false);
+      try {
+        await setOverlayEnabled(false);
+      } catch (err) {
+        console.error('[Artie] Could not update overlay state:', err);
+      }
       dismissOverlay(overlay);
     });
 
