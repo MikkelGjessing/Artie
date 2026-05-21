@@ -4,7 +4,7 @@
  * Artie – Content Script
  *
  * Injects and manages a floating Shadow DOM overlay on the current page.
- * Listens for TOGGLE_OVERLAY messages from the background service worker.
+ * Listens for global overlay-state updates from the background service worker.
  *
  * Dependencies (loaded before this file via manifest content_scripts array):
  *   window.ArticleExtractor  – modules/extractor.js
@@ -12,6 +12,9 @@
  */
 (() => {
   const HOST_ID = '__artie_overlay_host__';
+  const OVERLAY_ENABLED_KEY = 'artieOverlayEnabled';
+  let dismissTimerId = null;
+  let syncOverlayStatePending = false;
 
   // -----------------------------------------------------------------------
   // Overlay CSS (injected into the Shadow DOM – fully isolated)
@@ -147,7 +150,7 @@
           <button id="artie-close" title="Close Artie" aria-label="Close">✕</button>
         </div>
         <div id="artie-body">
-          <button id="artie-save">Export PDF</button>
+          <button id="artie-save">Save PDF</button>
           <div id="artie-status" aria-live="polite"></div>
         </div>
       </div>
@@ -175,7 +178,14 @@
     const statusEl = shadow.getElementById('artie-status');
 
     // Close button --------------------------------------------------------
-    closeBtn.addEventListener('click', () => dismissOverlay(overlay));
+    closeBtn.addEventListener('click', async () => {
+      try {
+        await setOverlayEnabled(false);
+      } catch (err) {
+        console.error('[Artie] Could not update overlay state:', err);
+      }
+      dismissOverlay(overlay);
+    });
 
     // Export PDF button ---------------------------------------------------
     saveBtn.addEventListener('click', async () => {
@@ -189,18 +199,28 @@
 
         const extracted = window.ArticleExtractor.extract(document);
 
-        const { filename: suggestedFilename, imageStats } = await window.ArticleExporter.exportPdf(
+        const { filename: suggestedFilename, html, imageStats } = await window.ArticleExporter.exportPdf(
           extracted,
           (stage) => {
             if (stage === 'images') {
               setStatus(statusEl, 'Embedding images…', '');
             } else if (stage === 'building') {
               setStatus(statusEl, 'Building printable page…', '');
-            } else if (stage === 'printing') {
-              setStatus(statusEl, 'Opening print dialog…', '');
+            } else if (stage === 'saving') {
+              setStatus(statusEl, 'Saving PDF…', '');
             }
           }
         );
+
+        const response = await chrome.runtime.sendMessage({
+          type: 'EXPORT_PDF',
+          html,
+          filename: suggestedFilename,
+        });
+
+        if (!response?.ok) {
+          throw new Error(response?.error || 'Automatic PDF export failed.');
+        }
 
         const { embedded, failed } = imageStats;
         const imgNote = embedded > 0
@@ -210,7 +230,7 @@
           ? ` (${failed} image${failed !== 1 ? 's' : ''} not embedded)`
           : '';
 
-        setStatus(statusEl, `✓ PDF ready as "${suggestedFilename}"${imgNote}${failNote}`, 'artie-success');
+        setStatus(statusEl, `✓ Saved PDF as "${suggestedFilename}"${imgNote}${failNote}`, 'artie-success');
       } catch (err) {
         console.error('[Artie] Save error:', err);
         setStatus(statusEl, `Error: ${err.message || 'Unknown error'}`, 'artie-error');
@@ -230,10 +250,12 @@
   // -----------------------------------------------------------------------
 
   function dismissOverlay(overlayEl) {
+    clearTimeout(dismissTimerId);
     overlayEl.classList.add('artie-hidden');
-    setTimeout(() => {
+    dismissTimerId = setTimeout(() => {
       const host = document.getElementById(HOST_ID);
       if (host) host.remove();
+      dismissTimerId = null;
     }, 200);
   }
 
@@ -289,7 +311,7 @@
   // Toggle logic – idempotent
   // -----------------------------------------------------------------------
 
-  function toggleOverlay() {
+  function showOverlay() {
     const existingHost = document.getElementById(HOST_ID);
 
     if (existingHost) {
@@ -297,13 +319,9 @@
       if (shadow) {
         const overlay = shadow.getElementById('artie-overlay');
         if (overlay) {
-          if (overlay.classList.contains('artie-hidden')) {
-            // Re-show a previously dismissed overlay.
-            overlay.classList.remove('artie-hidden');
-          } else {
-            // Currently visible – dismiss it.
-            dismissOverlay(overlay);
-          }
+          clearTimeout(dismissTimerId);
+          dismissTimerId = null;
+          overlay.classList.remove('artie-hidden');
           return;
         }
       }
@@ -313,14 +331,86 @@
     createOverlay();
   }
 
+  function hideOverlay() {
+    const existingHost = document.getElementById(HOST_ID);
+    if (!existingHost?.shadowRoot) return;
+
+    const overlay = existingHost.shadowRoot.getElementById('artie-overlay');
+    if (overlay) {
+      dismissOverlay(overlay);
+    } else {
+      existingHost.remove();
+    }
+  }
+
+  function applyOverlayEnabled(enabled) {
+    if (enabled) {
+      showOverlay();
+    } else {
+      hideOverlay();
+    }
+  }
+
+  async function readOverlayEnabled() {
+    try {
+      const stored = await chrome.storage.local.get(OVERLAY_ENABLED_KEY);
+      return Boolean(stored[OVERLAY_ENABLED_KEY]);
+    } catch (err) {
+      console.error('[Artie] Could not read overlay state:', err);
+      return false;
+    }
+  }
+
+  async function syncOverlayState() {
+    applyOverlayEnabled(await readOverlayEnabled());
+  }
+
+  function scheduleOverlayStateSync() {
+    if (syncOverlayStatePending) return;
+
+    syncOverlayStatePending = true;
+    queueMicrotask(async () => {
+      try {
+        await syncOverlayState();
+      } catch (err) {
+        console.error('[Artie] Could not sync overlay state:', err);
+      } finally {
+        syncOverlayStatePending = false;
+      }
+    });
+  }
+
+  async function setOverlayEnabled(enabled) {
+    const response = await chrome.runtime.sendMessage({
+      type: 'SET_OVERLAY_ENABLED',
+      enabled,
+    });
+
+    if (!response?.ok) {
+      throw new Error(response?.error || 'Could not update overlay state.');
+    }
+  }
+
   // -----------------------------------------------------------------------
   // Message listener (from background service worker)
   // -----------------------------------------------------------------------
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message.type === 'TOGGLE_OVERLAY') {
-      toggleOverlay();
+    if (message.type === 'SET_OVERLAY_ENABLED') {
+      applyOverlayEnabled(Boolean(message.enabled));
       sendResponse({ ok: true });
     }
   });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      scheduleOverlayStateSync();
+    }
+  });
+
+  window.addEventListener('pageshow', () => {
+    scheduleOverlayStateSync();
+  });
+
+  scheduleOverlayStateSync();
 })();
