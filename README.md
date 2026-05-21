@@ -1,17 +1,17 @@
-# Artie – Save Page
+# Artie – Export Article PDF
 
-A Chrome extension (Manifest V3) that injects a small floating overlay into any webpage and saves it as a clean, offline-readable HTML document with embedded images.
+A Chrome extension (Manifest V3) that injects a small floating overlay into any webpage and opens a one-click print-to-PDF flow using the article header as the PDF filename.
 
 ---
 
 ## What it does
 
 - Clicking the Artie toolbar icon injects (or toggles) a compact floating panel on the current page.
-- Clicking **Save Page** inside the panel:
+- Clicking **Export PDF** inside the panel:
   1. Extracts the main readable content using a Readability-style heuristic.
   2. Embeds images as base64 data URLs (where CORS allows).
-  3. Generates a clean, styled, standalone `.html` file.
-  4. Auto-downloads it to your default downloads folder.
+  3. Generates a clean, styled printable page.
+  4. Opens the browser print dialog so you can save as PDF.
 - The overlay stays on screen until you dismiss it (close button or second toolbar-icon click).
 - Works entirely in-page — no browser popup, no external server, no tracking.
 
@@ -27,7 +27,7 @@ artie/
 │   └── content.js         # Content script – Shadow DOM overlay, save flow
 ├── modules/
 │   ├── extractor.js       # Readability-style DOM extraction
-│   └── exporter.js        # Offline HTML builder + image embedding
+│   └── exporter.js        # Printable HTML builder + image embedding
 ├── icons/
 │   ├── icon16.png
 │   ├── icon48.png
@@ -55,13 +55,13 @@ artie/
 1. Navigate to any article, documentation page, or blog post.
 2. Click the **Artie** toolbar icon.  
    A small floating panel appears in the bottom-right corner of the page.
-3. Click **Save Page**.  
-   - Status updates: *Extracting content…* → *Embedding images…* → *Saving…* → *✓ Saved!*
-4. The saved `.html` file is downloaded automatically.  
-   Filename format: `Page_Title_YYYY-MM-DD.html` (spaces → underscores, special characters → underscores)
-5. Open the saved file in any browser – it works completely offline.
-6. Click **✕** or the toolbar icon again to dismiss the overlay.
-7. The overlay is draggable — grab the title bar and move it anywhere.
+3. Click **Export PDF**.  
+   - Status updates: *Extracting content…* → *Embedding images…* → *Opening print dialog…* → *✓ PDF ready as "…"*
+4. Chrome opens the print dialog; choose **Save as PDF**.
+5. The default PDF filename uses the article header (spaces/special characters are sanitised by browser rules).
+6. Open the saved file in any browser – it works completely offline.
+7. Click **✕** or the toolbar icon again to dismiss the overlay.
+8. The overlay is draggable — grab the title bar and move it anywhere.
 
 ---
 
@@ -79,7 +79,7 @@ artie/
 - Listens for `TOGGLE_OVERLAY` messages and calls `toggleOverlay()`.
 - Creates a `<div>` host element appended to `<html>`, then attaches a **Shadow DOM** (`mode: 'open'`) to it for full CSS isolation.
 - Manages the overlay lifecycle: show / hide / drag / close.
-- Calls `ArticleExtractor.extract()` and `ArticleExporter.exportPage()` when the user clicks **Save Page**.
+- Calls `ArticleExtractor.extract()` and `ArticleExporter.exportPdf()` when the user clicks **Export PDF**.
 
 ### Extractor (`modules/extractor.js`)
 
@@ -134,7 +134,6 @@ No host permissions, no `storage`, no `tabs`, no `cookies` — Artie requests th
 - **Reader mode preview** inside the overlay before downloading.
 - **Configurable output** (font choice, colour scheme, include/exclude images toggle).
 - **Progress bar** for image embedding on image-heavy pages.
-- **PDF export** via the Print API or a headless renderer.
 - **Clipboard support** – copy clean Markdown instead of/in addition to HTML.
 - **Auto-retry** for transiently failing image fetches.
 - **Page-specific extraction rules** for popular sites (Wikipedia, GitHub, MDN…).

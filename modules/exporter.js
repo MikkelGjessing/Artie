@@ -2,7 +2,7 @@
 
 /**
  * ArticleExporter – builds a self-contained offline HTML file from
- * extracted article data and triggers a browser download.
+ * extracted article data and can either download HTML or open print-to-PDF.
  *
  * Exported as `window.ArticleExporter` so it can be consumed by the
  * content script that is loaded after this file.
@@ -11,6 +11,8 @@
  *   const { filename, imageStats } = await window.ArticleExporter.exportPage(extracted, onProgress);
  */
 window.ArticleExporter = (() => {
+  // Allow the browser to finish layout and image painting before print().
+  const PRINT_DELAY_MS = 200;
   // -----------------------------------------------------------------------
   // Image embedding
   // -----------------------------------------------------------------------
@@ -325,6 +327,16 @@ ${READER_CSS}
     return `${sanitiseFilename(title || 'saved-page')}_${date}.html`;
   }
 
+  function buildPdfFilename(title) {
+    // Used for UI feedback; the browser may further sanitise the final filename.
+    return `${sanitiseFilename(title || 'saved-page')}.pdf`;
+  }
+
+  function deriveArticleTitle(title, content) {
+    const heading = content?.querySelector('h1, h2')?.textContent?.trim();
+    return heading || title || 'saved-page';
+  }
+
   // -----------------------------------------------------------------------
   // Download trigger
   // -----------------------------------------------------------------------
@@ -343,6 +355,40 @@ ${READER_CSS}
     requestAnimationFrame(() => {
       document.body.removeChild(anchor);
       URL.revokeObjectURL(url);
+    });
+  }
+
+  /** Open/prepare a new tab for printing before async work (avoids popup blocking). */
+  function openPrintWindow() {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      throw new Error('Popup blocked. Please allow popups for this site to export PDF.');
+    }
+
+    printWindow.document.open();
+    printWindow.document.write('<!doctype html><title>Preparing PDF…</title><p>Preparing PDF…</p>');
+    printWindow.document.close();
+    return printWindow;
+  }
+
+  /** Render HTML into a prepared tab and open the print dialog. */
+  function triggerPrintDialog(printWindow, html, documentTitle) {
+    return new Promise((resolve, reject) => {
+      printWindow.document.open();
+      printWindow.document.write(html);
+      printWindow.document.close();
+
+      // Let the browser finish layout before opening print.
+      setTimeout(() => {
+        try {
+          printWindow.document.title = documentTitle;
+          printWindow.focus();
+          printWindow.print();
+          resolve();
+        } catch (err) {
+          reject(new Error(`Print operation failed: ${err?.message || 'Unknown error'}`));
+        }
+      }, PRINT_DELAY_MS);
     });
   }
 
@@ -375,5 +421,32 @@ ${READER_CSS}
     return { filename, imageStats };
   }
 
-  return { exportPage, buildFilename };
+  /**
+   * Full pipeline for PDF: reserve tab → embed images → build HTML → print.
+   *
+   * @param {{ title: string, byline: string, content: HTMLElement }} extracted
+   * @param {Function|undefined} onProgress  (stage: string, detail: string) => void
+   * @returns {Promise<{ filename: string, imageStats: object }>}
+   */
+  async function exportPdf(extracted, onProgress) {
+    const printWindow = openPrintWindow();
+    const { title, byline, content } = extracted;
+    const sourceURL = window.location.href;
+    const savedAt = new Date().toLocaleString();
+    const articleHeader = deriveArticleTitle(title, content);
+
+    onProgress && onProgress('images', 'Starting image embedding…');
+    const imageStats = await embedImages(content, onProgress);
+
+    onProgress && onProgress('building', 'Building printable page…');
+    const html = buildHTML({ title: articleHeader, byline, content, savedAt, sourceURL });
+
+    const filename = buildPdfFilename(articleHeader);
+    onProgress && onProgress('printing', filename);
+    await triggerPrintDialog(printWindow, html, articleHeader);
+
+    return { filename, imageStats };
+  }
+
+  return { exportPage, exportPdf, buildFilename, buildPdfFilename };
 })();
